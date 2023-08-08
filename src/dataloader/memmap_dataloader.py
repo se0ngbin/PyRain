@@ -245,6 +245,8 @@ class DatafileJoin():
             print("UNAVAILABLE CATS: ", unavailable_cats)
         if len(results_dict.keys()) > 1:
             return results_dict
+        elif not results_dict:
+            return None
         else:
             return results_dict[list(results_dict.keys())[0]]
 

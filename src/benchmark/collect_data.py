@@ -28,7 +28,8 @@ def get_data(hparams: dict, tvt: str = 'train_valid'):
     normalizer = read_normalization_stats(hparams['norm_path'])
     if hparams['inc_time']:
         time_shift = get_local_shift(hparams['grid'], loaderDict['train'].dataset)
-    collate = lambda x: collate_fn(x, hparams, normalizer, time_shift)
+    def collate(x):
+        return collate_fn(x, hparams, normalizer, time_shift)
 
     return hparams, loaderDict, normalizer, collate
 

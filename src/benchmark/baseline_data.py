@@ -26,7 +26,7 @@ def collate_fn_persistence(x_list, v):
 
     inputs = torch.Tensor(np.concatenate(inputs))
     output = torch.Tensor(np.concatenate(output))
-    lead_times = torch.Tensor(lead_times).long()
+    lead_times = torch.Tensor(lead_times).half()
     return inputs, output, lead_times
 
 
@@ -71,7 +71,7 @@ def get_persistence_data(hparams):
     lead_times = lead_times //3600
     collate = lambda x: collate_fn_persistence(x, target_v)
     dataloader = DataLoader(loaderDict[phase], batch_size=hparams['batch_size'], \
-        num_workers=hparams['num_workers'], collate_fn=collate, shuffle=False)
+        num_workers=0, collate_fn=collate, shuffle=False)
     return loaderDict, dataloader, target_v, lead_times
 
 

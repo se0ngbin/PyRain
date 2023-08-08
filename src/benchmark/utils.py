@@ -37,11 +37,12 @@ def get_lat2d(grid, dataset=None):
 
 
 def add_device_hparams(hparams):
-    num_gpus = torch.cuda.device_count() if hparams['gpus'] == -1 else hparams['gpus']
-    if num_gpus > 0:
-        hparams['batch_size'] *= num_gpus
-        hparams['num_workers'] *= num_gpus
-    hparams['multi_gpu'] = num_gpus > 1
+    # num_gpus = torch.cuda.device_count() if hparams['gpus'] == -1 else hparams['gpus']
+    # if num_gpus > 0:
+    #     hparams['batch_size'] *= num_gpus
+    #     hparams['num_workers'] *= num_gpus
+    hparams['batch_size'] *= 5
+    hparams['multi_gpu'] = True
 
 
 def get_vbl_name(var:str, grid: float):
@@ -108,7 +109,8 @@ def leadtime_into_maxtrix(lead_times: list,
     bsz = len(lead_times)
     leadtime = np.zeros((bsz, seq_len, forecast_n_steps, latlon[0], latlon[1]))
     for batch_i, lt in enumerate(lead_times):
-        leadtime[batch_i, :, lt // forecast_freq-1, :, :] = 1
+        num = int(torch.div(lt, forecast_freq, rounding_mode='floor')-1)
+        leadtime[batch_i, :, num, :, :] = 1
     return leadtime
 
 
@@ -152,7 +154,7 @@ def collate_fn(x_list, hparams, normalizer, time_shift):
     
     inputs = torch.Tensor(np.stack(inputs))
     output = torch.Tensor(np.concatenate(output))
-    lead_times = torch.Tensor(lead_times).long()
+    lead_times = torch.Tensor(lead_times).half()
 
     # apply normalization
     if normalizer is not None:

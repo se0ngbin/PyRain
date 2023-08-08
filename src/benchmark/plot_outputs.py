@@ -6,7 +6,7 @@ import iris
 import iris.plot as iplt
 import cartopy.crs as ccrs
 from datetime import datetime
-from run_benchmark import RegressionModel
+from src.rain_forecast.run_benchmark import RegressionModel
 
 
 def collect_predictions(model_path, date):

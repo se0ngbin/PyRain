@@ -7,7 +7,6 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 import yaml
-import json
 import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
@@ -17,8 +16,250 @@ from src.benchmark.collect_data import get_data, get_checkpoint_path
 from src.benchmark.models import ConvLSTMForecaster
 from src.benchmark.graphics import plot_random_outputs_multi_ts
 from src.benchmark.metrics import eval_loss, define_loss_fn, collect_outputs
+from typing import Any, Dict
 
-class RegressionModel(pl.LightningModule):
+import numpy as np
+import torch
+from pytorch_lightning import LightningModule, Trainer
+from arch import ClimaXRainBench
+from utils.lr_scheduler import LinearWarmupCosineAnnealingLR
+from utils.metrics import (
+    mse,
+    lat_weighted_mse_val,
+    lat_weighted_nrmse,
+    lat_weighted_rmse,
+)
+from utils.pos_embed import interpolate_pos_embed
+from torchvision.transforms import transforms
+
+
+class RainForecastModule(LightningModule):
+    """Lightning module for rain forcasting with the ClimaXRainBench model.
+
+    Args:
+        net (ClimaXRainBench): ClimaXRainBench model.
+        pretrained_path (str, optional): Path to pre-trained checkpoint.
+        lr (float, optional): Learning rate.
+        beta_1 (float, optional): Beta 1 for AdamW.
+        beta_2 (float, optional): Beta 2 for AdamW.
+        weight_decay (float, optional): Weight decay for AdamW.
+        warmup_epochs (int, optional): Number of warmup epochs.
+        max_epochs (int, optional): Number of total epochs.
+        warmup_start_lr (float, optional): Starting learning rate for warmup.
+        eta_min (float, optional): Minimum learning rate.
+    """
+
+    def __init__(
+        self,
+        hparams,
+        train_set,
+        valid_set,
+        normalizer,
+        collate,
+        pretrained_path: str = "",
+        lat2d=None,
+    ):
+        super().__init__()
+        self.save_hyperparameters(hparams)
+        self.categories = hparams['categories']
+        self.net = ClimaXRainBench(
+                        default_vars=self.categories['input'],
+                        out_vars=self.categories['output'],
+        )
+        if len(pretrained_path) > 0:
+            self.load_mae_weights(pretrained_path)
+
+        self.trainset = train_set
+        self.validset = valid_set
+        self.collate = collate
+        self.normalizer = normalizer
+        self.pred_range = 0
+        self.val_clim = None
+        self.set_test_clim()
+
+        self.lat, self.lon = hparams['latlon']
+        
+        if lat2d is None:
+            lat2d = get_lat2d(hparams['grid'], self.validset.dataset)
+        self.weights_lat, self.loss = define_loss_fn(lat2d)
+        self.lat = lat2d[0][:,0]
+        print(lat2d[0][:,0], self.categories['output'])
+
+
+    def load_mae_weights(self, pretrained_path):
+        if pretrained_path.startswith("http"):
+            checkpoint = torch.hub.load_state_dict_from_url(pretrained_path, map_location=torch.device("cpu"))
+        else:
+            checkpoint = torch.load(pretrained_path, map_location=torch.device("cpu"))
+
+        print("Loading pre-trained checkpoint from: %s" % pretrained_path)
+        checkpoint_model = checkpoint["state_dict"]
+        # interpolate positional embedding
+        interpolate_pos_embed(self.net, checkpoint_model, new_size=self.net.img_size)
+
+        state_dict = self.state_dict()
+        if self.net.parallel_patch_embed:
+            if "token_embeds.proj_weights" not in checkpoint_model.keys():
+                raise ValueError(
+                    "Pretrained checkpoint does not have token_embeds.proj_weights for parallel processing. Please convert the checkpoints first or disable parallel patch_embed tokenization."
+                )
+        
+        for k in list(checkpoint_model.keys()):
+            if "channel" in k:
+                checkpoint_model[k.replace("channel", "var")] = checkpoint_model[k]
+                del checkpoint_model[k]
+            
+            if 'token_embeds' in k or 'head' in k: # initialize embedding from scratch
+                print(f"Removing key {k} from pretrained checkpoint")
+                del checkpoint_model[k]
+                continue
+                
+        for k in list(checkpoint_model.keys()):
+            if k not in state_dict.keys() or checkpoint_model[k].shape != state_dict[k].shape:
+                print(f"Removing key {k} from pretrained checkpoint")
+                del checkpoint_model[k]
+
+        # load pre-trained model
+        msg = self.load_state_dict(checkpoint_model, strict=False)
+        print(msg)
+
+
+    def train_dataloader(self):
+        return DataLoader(self.trainset, batch_size=self.hparams['batch_size'], num_workers=1, collate_fn=self.collate, shuffle=True)
+
+    def val_dataloader(self):
+        return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=1, collate_fn=self.collate, shuffle=False)
+
+    def set_test_clim(self):
+        # y_avg = torch.from_numpy(self.Y_train_all).squeeze(1).mean(0) # H, W
+        # w_lat = np.cos(np.deg2rad(self.lat)) # (H,)
+        # w_lat = w_lat / w_lat.mean()
+        # w_lat = torch.from_numpy(w_lat).unsqueeze(-1).to(dtype=y_avg.dtype, device=y_avg.device) # (H, 1)
+        # self.test_clim = torch.abs(torch.mean(y_avg * w_lat))
+        self.test_clim = 0
+
+    # def set_denormalizer(self):
+        # TODO
+
+    def training_step(self, batch: Any, batch_idx: int):
+        x, y, lead_times = batch
+
+        loss_dict, _ = self.net.forward(x, y, lead_times, self.categories['input'], self.categories['output'], [mse], lat=self.lat)
+        loss_dict = loss_dict[0]
+        for var in loss_dict.keys():
+            self.log(
+                "train/" + var,
+                loss_dict[var],
+                on_step=True,
+                on_epoch=False,
+                prog_bar=True,
+            )
+        loss = loss_dict['loss']
+
+        return loss
+
+    def validation_step(self, batch: Any, batch_idx: int):
+        x, y, lead_times = batch
+
+        all_loss_dicts = self.net.evaluate(
+            x,
+            y,
+            lead_times,
+            self.categories['input'],
+            self.categories['output'],
+            transform=self.normalizer,
+            metrics=[lat_weighted_mse_val, lat_weighted_rmse],
+            lat=self.lat,
+            clim=self.val_clim,
+            log_postfix=None
+        )
+
+        loss_dict = {}
+        for d in all_loss_dicts:
+            for k in d.keys():
+                loss_dict[k] = d[k]
+
+        for var in loss_dict.keys():
+            self.log(
+                "val/" + var,
+                loss_dict[var],
+                on_step=False,
+                on_epoch=True,
+                prog_bar=False,
+                sync_dist=True,
+            )
+        return loss_dict
+
+    def test_step(self, batch: Any, batch_idx: int):
+        x, y, lead_times = batch
+
+        all_loss_dicts = self.net.evaluate(
+            x,
+            y,
+            lead_times,
+            self.categories['input'],
+            self.categories['output'],
+            transform=self.normalizer,
+            metrics=[lat_weighted_mse_val, lat_weighted_rmse, lat_weighted_nrmse],
+            lat=self.lat,
+            clim=self.test_clim,
+            log_postfix=None
+        )
+
+        loss_dict = {}
+        for d in all_loss_dicts:
+            for k in d.keys():
+                loss_dict[k] = d[k]
+
+        for var in loss_dict.keys():
+            self.log(
+                "test/" + var,
+                loss_dict[var],
+                on_step=False,
+                on_epoch=True,
+                prog_bar=False,
+                sync_dist=True,
+            )
+        return loss_dict
+
+    def configure_optimizers(self):
+        decay = []
+        no_decay = []
+        for name, m in self.named_parameters():
+            if "var_embed" in name or "pos_embed" in name or "time_pos_embed" in name:
+                no_decay.append(m)
+            else:
+                decay.append(m)
+
+        optimizer = torch.optim.AdamW(
+            [
+                {
+                    "params": decay,
+                    "lr": self.hparams.lr,
+                    "betas": (self.hparams.beta_1, self.hparams.beta_2),
+                    "weight_decay": self.hparams.weight_decay,
+                },
+                {
+                    "params": no_decay,
+                    "lr": self.hparams.lr,
+                    "betas": (self.hparams.beta_1, self.hparams.beta_2),
+                    "weight_decay": 0
+                },
+            ]
+        )
+
+        lr_scheduler = LinearWarmupCosineAnnealingLR(
+            optimizer,
+            self.hparams.warmup_epochs,
+            self.hparams.max_epochs,
+            self.hparams.warmup_start_lr,
+            self.hparams.eta_min,
+        )
+        scheduler = {"scheduler": lr_scheduler, "interval": "step", "frequency": 1}
+
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
+    
+class RegressionModel(LightningModule):
     """
     Regression Module
     """
@@ -155,59 +396,27 @@ def main(hparams):
     logger = loggers.TensorBoardLogger(hparams['log_path'], version=hparams['version'])
     logger.log_hyperparams(params=hparams)
 
-    # define model
-    model = RegressionModel(hparams, loaderDict['train'], loaderDict['valid'], normalizer, collate)
+    # use rainforecast module
+    model = RainForecastModule(hparams, loaderDict['train'], loaderDict['valid'], normalizer, collate, pretrained_path=hparams['load'])
 
-    chkpt = None if hparams['load'] is None else get_checkpoint_path(hparams['load'])
-    trainer = pl.Trainer(
-        gpus=hparams['gpus'],
+    trainer = Trainer(
+        accelerator='gpu',
+        devices=hparams['gpus'],
         logger=logger,
         max_epochs=hparams['epochs'],
-        distributed_backend=hparams['distributed_backend'],
-        precision=16 if hparams['use_amp'] else 32,
+        # precision=16 if hparams['use_amp'] else 32,
+        precision=16,
         default_root_dir=hparams['log_path'],
         deterministic=True,
-        resume_from_checkpoint=chkpt,
-        auto_lr_find=hparams['auto_lr'],
-        auto_scale_batch_size=hparams['auto_bsz']
     )
+    torch.cuda.empty_cache()
+    torch.set_float32_matmul_precision('medium')
     trainer.fit(model)
-
-
-def main_test(hparams):
-    assert (hparams.load is not None) and (hparams.phase is not None)
-    phase = hparams.phase
-    log_dir = hparams.load
-    hparams = vars(hparams)
-    add_device_hparams(hparams)
-
-    # Load trained model
-    print(f'Loading from {log_dir} to evaluate {phase} data.')
-    model, hparams, loaderDict, normalizer, collate = RegressionModel.load_model(log_dir, \
-        multi_gpu=hparams['multi_gpu'], num_workers=hparams['num_workers'])
-    trainer = pl.Trainer(
-        gpus=hparams['gpus'],
-        logger=None,
-        max_epochs=hparams['epochs'],
-        distributed_backend=hparams['distributed_backend'],
-        default_root_dir=hparams['log_path'],
-        deterministic=True
-    )
-    test_dataloader = DataLoader(loaderDict[phase], batch_size=hparams['batch_size'], \
-        num_workers=hparams['num_workers'], collate_fn=collate, shuffle=False)
+    test_dataloader = DataLoader(loaderDict["test"], batch_size=hparams['batch_size'], \
+        num_workers=1, collate_fn=collate, shuffle=False)
 
     # Evaluate the model
-    test_results = trainer.test(model, test_dataloaders=test_dataloader)
-    if isinstance(test_results, list):
-        test_results = test_results[0]
-    rmse = {'rmse_' + n: np.sqrt(test_results[n]) for n in test_results}
-    test_results = {**rmse, **test_results}
-
-    # Save evaluation results
-    results_path = Path(log_dir) / f'{phase}_results.json'
-    with open(results_path, 'w') as fp:
-        json.dump(test_results, fp, sort_keys=True, indent=4)
-    print('saved to ', results_path)
+    trainer.test(model, test_dataloaders=test_dataloader)
 
 
 def main_baselines(hparams):
@@ -277,10 +486,10 @@ if __name__ == '__main__':
     parser.add_argument("--gpus", type=int, default=-1, help="Number of available GPUs")
     parser.add_argument('--distributed-backend', type=str, default='dp', choices=('dp', 'ddp', 'ddp2'), help='Backend for pytorch-lightning')
     parser.add_argument('--use_amp', action='store_true', help='If true uses 16 bit precision')
-    parser.add_argument("--batch_size", type=int, default=32, help="Size of the batches")
+    parser.add_argument("--batch_size", type=int, default=16, help="Size of the batches")
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=100, help="No. of epochs to train")
-    parser.add_argument("--num_workers", type=int, default=8, help="No. of dataloader workers")
+    parser.add_argument("--num_workers", type=int, default=1, help="No. of dataloader workers")
     parser.add_argument("--test", action='store_true', help='Evaluate trained model')
     parser.add_argument("--load", type=str, help='Path of checkpoint directory to load')
     parser.add_argument("--phase", type=str, default='test', choices=['test', 'valid'], help='Which dataset to test on.')
@@ -297,9 +506,7 @@ if __name__ == '__main__':
 
     seed_everything(hparams.seed)
     
-    if hparams.test:
-        main_test(hparams)
-    elif hparams.persistence or hparams.climatology:
+    if hparams.persistence or hparams.climatology:
         main_baselines(hparams)
     else:
         main(hparams)
