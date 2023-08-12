@@ -5,12 +5,12 @@ data_paths: [
 ]
 norm_path: "/home/seongbin/PyRain/analysis/precip_estimation/normalise/5625__16-04-01_12:00to17-12-31_11:00.json"
 log_path: "/data0/ckpts/seongbin/rainbench/"
-lr: 5e-4
+lr: 0.0005
 beta_1: 0.9
 beta_2: 0.999
-weight_decay: 1e-5
+weight_decay: 0.00001
 warmup_epochs: 60
 max_epochs: 600
-warmup_start_lr: 1e-8
-eta_min: 1e-8
+warmup_start_lr: 0.00000001
+eta_min: 0.00000001
 load: 'https://huggingface.co/tungnd/climax/resolve/main/5.625deg.ckpt'

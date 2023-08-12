@@ -15,6 +15,11 @@ Things I tried:
 - Set num_workers to 0
 Helpful link: [here](https://towardsdatascience.com/i-am-so-done-with-cuda-out-of-memory-c62f42947dca)
 
+#### Mitigations
+- reduce timestamps in batch
+- keep number of timestamps but use multiple GPUs
+- in pytorch lightning, there are ways to reduce memory usage ([link](https://lightning.ai/docs/pytorch/stable/advanced/model_parallel.html)) - deep speed
+
 ## How to run
 `python3 src/rain_forecast/run_benchmark.py --sources simsat --inc_time --config_file config.yml --gpus 2`
 

@@ -13,7 +13,7 @@ from src.benchmark.utils import local_time_shift, collate_fn, get_local_shift, i
 from src.dataloader.memmap_dataloader import Dataset
 
 
-def get_data(hparams: dict, tvt: str = 'train_valid'):
+def get_data(hparams: dict, tvt: str = 'train_valid_test'):
     """Main function to get data according to hparams"""
     datapath, partition_conf, sample_conf = write_data_config(hparams)
 
