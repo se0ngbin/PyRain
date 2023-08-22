@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 import yaml
 import torch
+from deepspeed import ops
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning import loggers
@@ -76,6 +77,7 @@ class RainForecastModule(LightningModule):
         self.pred_range = 0
         self.val_clim = None
         self.set_test_clim()
+        self.set_denormalizer()
 
         self.lat, self.lon = hparams['latlon']
         
@@ -138,8 +140,10 @@ class RainForecastModule(LightningModule):
         # self.test_clim = torch.abs(torch.mean(y_avg * w_lat))
         self.test_clim = 0
 
-    # def set_denormalizer(self):
-        # TODO
+    def set_denormalizer(self):
+        target_v = self.categories['output'][0]
+        std = self.normalizer[target_v]['std']
+        self.denormalizer = lambda x: np.exp(x - 1) * std
 
     def training_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
@@ -167,7 +171,7 @@ class RainForecastModule(LightningModule):
             lead_times,
             self.categories['input'],
             self.categories['output'],
-            transform=self.normalizer,
+            transform=self.denormalizer,
             metrics=[lat_weighted_mse_val, lat_weighted_rmse],
             lat=self.lat,
             clim=self.val_clim,
@@ -199,7 +203,7 @@ class RainForecastModule(LightningModule):
             lead_times,
             self.categories['input'],
             self.categories['output'],
-            transform=self.normalizer,
+            transform=self.denormalizer,
             metrics=[lat_weighted_mse_val, lat_weighted_rmse, lat_weighted_nrmse],
             lat=self.lat,
             clim=self.test_clim,
@@ -231,7 +235,24 @@ class RainForecastModule(LightningModule):
             else:
                 decay.append(m)
 
-        optimizer = torch.optim.AdamW(
+        # optimizer = torch.optim.AdamW(
+        #     [
+        #         {
+        #             "params": decay,
+        #             "lr": self.hparams.lr,
+        #             "betas": (self.hparams.beta_1, self.hparams.beta_2),
+        #             "weight_decay": self.hparams.weight_decay,
+        #         },
+        #         {
+        #             "params": no_decay,
+        #             "lr": self.hparams.lr,
+        #             "betas": (self.hparams.beta_1, self.hparams.beta_2),
+        #             "weight_decay": 0
+        #         },
+        #     ]
+        # )
+
+        optimizer = ops.adam.FusedAdam(
             [
                 {
                     "params": decay,
@@ -405,9 +426,10 @@ def main(hparams):
         logger=logger,
         max_epochs=hparams['epochs'],
         # precision=16 if hparams['use_amp'] else 32,
-        precision=16,
+        precision='16-mixed',
         default_root_dir=hparams['log_path'],
         deterministic=True,
+        strategy=hparams['strategy'],
     )
     torch.cuda.empty_cache()
     torch.set_float32_matmul_precision('medium')
@@ -495,6 +517,7 @@ if __name__ == '__main__':
     parser.add_argument("--phase", type=str, default='test', choices=['test', 'valid'], help='Which dataset to test on.')
     parser.add_argument("--auto_lr", action='store_true', help='Auto select learning rate.')
     parser.add_argument("--auto_bsz", action='store_true', help='Auto select batch size.')
+    parser.add_argument("--strategy", type=str, default='deepspeed_stage_3', help='Memory saving strategy.')
     # Monitoring
     parser.add_argument("--version", type=str, help='Version tag for tensorboard')
     parser.add_argument("--plot", action='store_true', help='Plot outputs on tensorboard')
