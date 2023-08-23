@@ -143,7 +143,7 @@ class RainForecastModule(LightningModule):
     def set_denormalizer(self):
         target_v = self.categories['output'][0]
         std = self.normalizer[target_v]['std']
-        self.denormalizer = lambda x: np.exp(x - 1) * std
+        self.denormalizer = lambda x: np.exp(x.cpu() - 1) * std
 
     def training_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
@@ -268,6 +268,23 @@ class RainForecastModule(LightningModule):
                 },
             ]
         )
+
+        # optimizer = ops.adam.DeepSpeedCPUAdam(
+        #     [
+        #         {
+        #             "params": decay,
+        #             "lr": self.hparams.lr,
+        #             "betas": (self.hparams.beta_1, self.hparams.beta_2),
+        #             "weight_decay": self.hparams.weight_decay,
+        #         },
+        #         {
+        #             "params": no_decay,
+        #             "lr": self.hparams.lr,
+        #             "betas": (self.hparams.beta_1, self.hparams.beta_2),
+        #             "weight_decay": 0
+        #         },
+        #     ]
+        # )
 
         lr_scheduler = LinearWarmupCosineAnnealingLR(
             optimizer,
@@ -438,7 +455,7 @@ def main(hparams):
         num_workers=1, collate_fn=collate, shuffle=False)
 
     # Evaluate the model
-    trainer.test(model, test_dataloaders=test_dataloader)
+    trainer.test(model, dataloaders=test_dataloader)
 
 
 def main_baselines(hparams):
@@ -506,7 +523,6 @@ if __name__ == '__main__':
     parser.add_argument("--no_relu", action='store_true', help='Not using relu on last network layer')
     # Training
     parser.add_argument("--gpus", type=int, default=-1, help="Number of available GPUs")
-    parser.add_argument('--distributed-backend', type=str, default='dp', choices=('dp', 'ddp', 'ddp2'), help='Backend for pytorch-lightning')
     parser.add_argument('--use_amp', action='store_true', help='If true uses 16 bit precision')
     parser.add_argument("--batch_size", type=int, default=16, help="Size of the batches")
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
