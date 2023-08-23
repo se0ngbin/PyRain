@@ -23,3 +23,8 @@ Helpful link: [here](https://towardsdatascience.com/i-am-so-done-with-cuda-out-o
 ## How to run
 `python3 src/rain_forecast/run_benchmark.py --sources simsat --inc_time --config_file config.yml --gpus 2`
 
+
+## 8/22
+- need to fix some `partition_conf` issues
+- I don't think denormalizer is implemented correctly
+- everything else seems to be working

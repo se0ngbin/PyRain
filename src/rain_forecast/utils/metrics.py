@@ -106,8 +106,8 @@ def lat_weighted_rmse(pred, y, transform, vars, lat, clim, log_postfix):
     """
 
     # TODO: uncoment these by implementing denormalization
-    # pred = transform(pred)
-    # y = transform(y)
+    pred = transform(pred)
+    y = transform(y)
 
     error = (pred - y) ** 2  # [B, V, H, W]
 
@@ -136,8 +136,9 @@ def lat_weighted_acc(pred, y, transform, vars, lat, clim, log_postfix):
     lat: H
     """
 
-    pred = transform(pred)
-    y = transform(y)
+    # TODO: fix denormalization
+    # pred = transform(pred)
+    # y = transform(y)
 
     # lattitude weights
     w_lat = np.cos(np.deg2rad(lat))
@@ -171,8 +172,9 @@ def lat_weighted_nrmses(pred, y, transform, vars, lat, clim, log_postfix):
     lat: H
     """
 
-    pred = transform(pred)
-    y = transform(y)
+    # TODO: fix denormalization
+    # pred = transform(pred)
+    # y = transform(y)
     y_normalization = clim
 
     # lattitude weights
@@ -200,8 +202,9 @@ def lat_weighted_nrmseg(pred, y, transform, vars, lat, clim, log_postfix):
     lat: H
     """
 
-    pred = transform(pred)
-    y = transform(y)
+    # TODO: fix denormalization
+    # pred = transform(pred)
+    # y = transform(y)
     y_normalization = clim
 
     # lattitude weights
@@ -261,8 +264,9 @@ def pearson(pred, y, transform, vars, lat, log_steps, log_days, clim):
     lat: H
     """
 
-    pred = transform(pred)
-    y = transform(y)
+    # TODO: fix denormalization
+    # pred = transform(pred)
+    # y = transform(y)
 
     loss_dict = {}
     with torch.no_grad():
@@ -285,8 +289,9 @@ def lat_weighted_mean_bias(pred, y, transform, vars, lat, log_steps, log_days, c
     lat: H
     """
 
-    pred = transform(pred)
-    y = transform(y)
+    # TODO: fix denormalization
+    # pred = transform(pred)
+    # y = transform(y)
 
     # lattitude weights
     w_lat = np.cos(np.deg2rad(lat))

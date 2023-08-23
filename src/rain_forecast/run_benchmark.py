@@ -19,6 +19,7 @@ from src.benchmark.graphics import plot_random_outputs_multi_ts
 from src.benchmark.metrics import eval_loss, define_loss_fn, collect_outputs
 from typing import Any, Dict
 
+import json
 import numpy as np
 import torch
 from pytorch_lightning import LightningModule, Trainer
@@ -55,6 +56,7 @@ class RainForecastModule(LightningModule):
         hparams,
         train_set,
         valid_set,
+        test_set,
         normalizer,
         collate,
         pretrained_path: str = "",
@@ -72,6 +74,7 @@ class RainForecastModule(LightningModule):
 
         self.trainset = train_set
         self.validset = valid_set
+        self.testset = test_set
         self.collate = collate
         self.normalizer = normalizer
         self.pred_range = 0
@@ -127,11 +130,15 @@ class RainForecastModule(LightningModule):
 
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=self.hparams['batch_size'], num_workers=1, collate_fn=self.collate, shuffle=True)
+        return DataLoader(self.trainset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=1, collate_fn=self.collate, shuffle=False)
+        return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
 
+    def test_dataloader(self):
+        print('test set length', len(self.testset))
+        return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
+    
     def set_test_clim(self):
         # y_avg = torch.from_numpy(self.Y_train_all).squeeze(1).mean(0) # H, W
         # w_lat = np.cos(np.deg2rad(self.lat)) # (H,)
@@ -143,7 +150,8 @@ class RainForecastModule(LightningModule):
     def set_denormalizer(self):
         target_v = self.categories['output'][0]
         std = self.normalizer[target_v]['std']
-        self.denormalizer = lambda x: np.exp(x.cpu() - 1) * std
+
+        self.denormalizer = lambda x: torch.exp(x - 1) * std
 
     def training_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
@@ -435,27 +443,32 @@ def main(hparams):
     logger.log_hyperparams(params=hparams)
 
     # use rainforecast module
-    model = RainForecastModule(hparams, loaderDict['train'], loaderDict['valid'], normalizer, collate, pretrained_path=hparams['load'])
+    model = RainForecastModule(hparams, loaderDict['train'], loaderDict['valid'], loaderDict['test'], normalizer, collate, pretrained_path=hparams['load'])
 
     trainer = Trainer(
         accelerator='gpu',
         devices=hparams['gpus'],
         logger=logger,
         max_epochs=hparams['epochs'],
-        # precision=16 if hparams['use_amp'] else 32,
-        precision='16-mixed',
+        precision=16 if hparams['use_amp'] else 32,
         default_root_dir=hparams['log_path'],
         deterministic=True,
         strategy=hparams['strategy'],
     )
-    torch.cuda.empty_cache()
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model)
-    test_dataloader = DataLoader(loaderDict["test"], batch_size=hparams['batch_size'], \
-        num_workers=1, collate_fn=collate, shuffle=False)
 
     # Evaluate the model
-    trainer.test(model, dataloaders=test_dataloader)
+    res = trainer.test(model.cuda())
+
+    # Save evaluation results
+    results_path = Path(f'./results/{hparams["version"]}_results.json')
+    
+    with open(results_path, 'w') as fp:
+        json.dump(res[0], fp, indent=4)
+
+    fp.close()
+    
 
 
 def main_baselines(hparams):
@@ -527,7 +540,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=16, help="Size of the batches")
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=100, help="No. of epochs to train")
-    parser.add_argument("--num_workers", type=int, default=1, help="No. of dataloader workers")
+    parser.add_argument("--num_workers", type=int, default=64, help="No. of dataloader workers")
     parser.add_argument("--test", action='store_true', help='Evaluate trained model')
     parser.add_argument("--load", type=str, help='Path of checkpoint directory to load')
     parser.add_argument("--phase", type=str, default='test', choices=['test', 'valid'], help='Which dataset to test on.')
