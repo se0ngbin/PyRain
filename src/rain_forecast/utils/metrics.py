@@ -106,8 +106,8 @@ def lat_weighted_rmse(pred, y, transform, vars, lat, clim, log_postfix):
     """
 
     # TODO: uncoment these by implementing denormalization
-    pred = transform(pred)
-    y = transform(y)
+    pred[:, 0, :, :] = transform(pred[:, 0, :, :])
+    y[:, 0, :, :] = transform(y[:, 0, :, :])
 
     error = (pred - y) ** 2  # [B, V, H, W]
 
@@ -137,8 +137,8 @@ def lat_weighted_acc(pred, y, transform, vars, lat, clim, log_postfix):
     """
 
     # TODO: fix denormalization
-    # pred = transform(pred)
-    # y = transform(y)
+    pred[:, 0, :, :] = transform(pred[:, 0, :, :])
+    y[:, 0, :, :] = transform(y[:, 0, :, :])
 
     # lattitude weights
     w_lat = np.cos(np.deg2rad(lat))
@@ -173,8 +173,8 @@ def lat_weighted_nrmses(pred, y, transform, vars, lat, clim, log_postfix):
     """
 
     # TODO: fix denormalization
-    # pred = transform(pred)
-    # y = transform(y)
+    pred[:, 0, :, :] = transform(pred[:, 0, :, :])
+    y[:, 0, :, :] = transform(y[:, 0, :, :])
     y_normalization = clim
 
     # lattitude weights
@@ -203,8 +203,8 @@ def lat_weighted_nrmseg(pred, y, transform, vars, lat, clim, log_postfix):
     """
 
     # TODO: fix denormalization
-    # pred = transform(pred)
-    # y = transform(y)
+    pred[:, 0, :, :] = transform(pred[:, 0, :, :])
+    y[:, 0, :, :] = transform(y[:, 0, :, :])
     y_normalization = clim
 
     # lattitude weights
