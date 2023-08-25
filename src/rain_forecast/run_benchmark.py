@@ -81,14 +81,15 @@ class RainForecastModule(LightningModule):
         self.val_clim = None
         self.set_test_clim()
         self.set_denormalizer()
-
+        self.lead_times = hparams['lead_times']
+        self.multi_gpu = hparams['multi_gpu']
         self.lat, self.lon = hparams['latlon']
+        self.test_step_outputs = []
         
         if lat2d is None:
             lat2d = get_lat2d(hparams['grid'], self.validset.dataset)
         self.weights_lat, self.loss = define_loss_fn(lat2d)
         self.lat = lat2d[0][:,0]
-        print(lat2d[0][:,0], self.categories['output'])
 
 
     def load_mae_weights(self, pretrained_path):
@@ -173,6 +174,12 @@ class RainForecastModule(LightningModule):
     def validation_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
 
+
+        # inputs, output, lts = batch
+        # pred = self(inputs.contiguous())
+        # results = eval_loss(pred, output, lts, self.loss, self.lead_times, phase='train', target_v=self.target_v, normalizer=self.normalizer)
+        # return {'loss': results['train_loss'], 'log': results, 'progress_bar': results}
+    
         all_loss_dicts = self.net.evaluate(
             x,
             y,
@@ -204,36 +211,49 @@ class RainForecastModule(LightningModule):
 
     def test_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
-
-        all_loss_dicts = self.net.evaluate(
+        _, pred = self.net.forward(
             x,
             y,
             lead_times,
             self.categories['input'],
             self.categories['output'],
-            transform=self.denormalizer,
-            metrics=[lat_weighted_mse_val, lat_weighted_rmse, lat_weighted_nrmse],
+            metric=None,
             lat=self.lat,
-            clim=self.test_clim,
-            log_postfix=None
         )
-
-        loss_dict = {}
-        for d in all_loss_dicts:
-            for k in d.keys():
-                loss_dict[k] = d[k]
-
-        for var in loss_dict.keys():
+        results = eval_loss(pred, y, lead_times, self.loss, self.lead_times, phase='test', target_v=self.categories['output'][0], normalizer=self.normalizer)
+        for var in results.keys():
             self.log(
                 "test/" + var,
-                loss_dict[var],
+                results[var],
                 on_step=False,
                 on_epoch=True,
                 prog_bar=False,
                 sync_dist=True,
             )
-        return loss_dict
 
+        self.test_step_outputs.append(results)
+        return results
+
+        # all_loss_dicts = self.net.evaluate(
+        #     x,
+        #     y,
+        #     lead_times,
+        #     self.categories['input'],
+        #     self.categories['output'],
+        #     transform=self.denormalizer,
+        #     metrics=[self.loss],
+        #     lat=self.lat,
+        #     clim=self.test_clim,
+        #     log_postfix=None
+        # )
+
+        # loss_dict = {}
+        # for d in all_loss_dicts:
+        #     for k in d.keys():
+        #         loss_dict[k] = d[k]
+
+        # return loss_dict
+    
     def configure_optimizers(self):
         decay = []
         no_decay = []
@@ -459,13 +479,22 @@ def main(hparams):
     trainer.fit(model)
 
     # Evaluate the model
-    res = trainer.test(model.cuda())
+    trainer.test(model.cuda())
+
+    # wait for all processes to complete (? idk if this works)
+    torch.distributed.barrier()
+    res = collect_outputs(model.test_step_outputs, False)
+    model.test_step_outputs.clear()  # free memory
+    print(res, type(res))
+
+    if isinstance(res, list):
+        res = res[0]
 
     # Save evaluation results
     results_path = Path(f'./results/{hparams["version"]}_results.json')
     
     with open(results_path, 'w') as fp:
-        json.dump(res[0], fp, indent=4)
+        json.dump(res, fp, indent=4)
 
     fp.close()
     
@@ -488,7 +517,7 @@ def main_baselines(hparams):
 
     # define loss
     lat2d = get_lat2d(hparams['grid'], loaderDict[phase].dataset)
-    loss = define_loss_fn(lat2d)
+    _, loss = define_loss_fn(lat2d)
     
     # collect data and iterate through
     outputs = []
@@ -504,9 +533,19 @@ def main_baselines(hparams):
             outputs.append(results)
     
     # collect results
-    log_dict = collect_outputs(outputs, hparams['multi_gpu'])
+    log_dict = collect_outputs(outputs, False)
+    # if target_v is 'tp' multiply by 1000 to get mm/day
+    if target_v == 'tp':
+        log_dict = {k: v * 1000 for k, v in log_dict.items()}
+        
     log_dict = {v: float(log_dict[v].detach().cpu()) for v in log_dict}
     print(log_dict)
+
+    # Save evaluation results
+    results_path = Path(f'./results/{hparams["version"]}_results.json')
+    with open(results_path, 'w') as fp:
+        json.dump(log_dict, fp, indent=4)
+
     return log_dict
 
 
@@ -540,7 +579,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=16, help="Size of the batches")
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
     parser.add_argument("--epochs", type=int, default=100, help="No. of epochs to train")
-    parser.add_argument("--num_workers", type=int, default=64, help="No. of dataloader workers")
+    parser.add_argument("--num_workers", type=int, default=8, help="No. of dataloader workers")
     parser.add_argument("--test", action='store_true', help='Evaluate trained model')
     parser.add_argument("--load", type=str, help='Path of checkpoint directory to load')
     parser.add_argument("--phase", type=str, default='test', choices=['test', 'valid'], help='Which dataset to test on.')

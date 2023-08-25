@@ -28,3 +28,8 @@ Helpful link: [here](https://towardsdatascience.com/i-am-so-done-with-cuda-out-o
 - need to fix some `partition_conf` issues
 - I don't think denormalizer is implemented correctly
 - everything else seems to be working
+
+
+## 8/23
+- figure out what multiple GPUs do in collect_outputs
+- figure out how to use the average of multiple GPUs instead of the last one
