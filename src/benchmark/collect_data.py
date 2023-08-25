@@ -66,7 +66,8 @@ def write_partition_conf(sources: str, imerg: bool):
         sample_stride = 1
 
     val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 12,31,23).timestamp())
-    test_timerange =  (datetime(2019,1,6,0).timestamp(), datetime(2019, 12,31,23).timestamp())
+    test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 12, 31, 17).timestamp())
+    # test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 1, 31, 23).timestamp())
 
     increments = int(sample_stride * 60 * 60)
 
