@@ -14,7 +14,7 @@ def collect_outputs(outputs, multi_gpu):
         else:
             collect = [v[loss_type] for v in outputs if v[loss_type] == v[loss_type]]
         if collect:
-            log_dict[loss_type] = torch.stack(collect).mean()
+            log_dict[loss_type] = torch.stack(collect).mean().item()
         else:
             log_dict[loss_type] = float('nan')
     return log_dict
@@ -22,7 +22,7 @@ def collect_outputs(outputs, multi_gpu):
 
 def define_loss_fn(lat2d):
     weights_lat = compute_latitude_weighting(lat2d)
-    loss = lambda x, y: compute_weighted_mse(x, y, weights_lat)
+    loss = lambda x, y: torch.sqrt(compute_weighted_mse(x, y, weights_lat))
     return weights_lat, loss
 
 
@@ -40,7 +40,7 @@ def compute_weighted_mse(pred, truth, weights_lat, flat_weights=False):
         truth: Truth. Torch tensor.
         weights_lat: Latitude weighting, 2d Torch tensor. 
     Returns:
-        rmse: Latitude weighted mean squared error
+        mse: Latitude weighted mean squared error
     """
     if not flat_weights:
         weights_lat = truth.new(weights_lat).expand_as(truth)

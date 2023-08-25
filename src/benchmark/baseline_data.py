@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from src.benchmark.utils import get_vbl_name
-from src.benchmark.collect_data import define_data_paths, write_partition_conf, read_normalization_stats
+from src.benchmark.collect_data import write_partition_conf, read_normalization_stats
 from src.dataloader.memmap_dataloader import Dataset
 
 

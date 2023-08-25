@@ -37,12 +37,11 @@ def get_lat2d(grid, dataset=None):
 
 
 def add_device_hparams(hparams):
-    # num_gpus = torch.cuda.device_count() if hparams['gpus'] == -1 else hparams['gpus']
-    # if num_gpus > 0:
-    #     hparams['batch_size'] *= num_gpus
-    #     hparams['num_workers'] *= num_gpus
-    hparams['batch_size'] *= 5
-    hparams['multi_gpu'] = True
+    num_gpus = torch.cuda.device_count() if hparams['gpus'] == -1 else hparams['gpus']
+    if num_gpus > 0:
+        hparams['batch_size'] *= num_gpus
+        # hparams['num_workers'] *= num_gpus
+    hparams['multi_gpu'] = num_gpus > 1
 
 
 def get_vbl_name(var:str, grid: float):
