@@ -8,21 +8,18 @@ from datetime import datetime
 from pathlib import Path
 import yaml
 import torch
-from deepspeed import ops
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-from pytorch_lightning import loggers
 from src.benchmark.utils import add_device_hparams, get_lat2d, add_yml_params, seed_everything
 from src.benchmark.collect_data import get_data, get_checkpoint_path
 from src.benchmark.models import ConvLSTMForecaster
 from src.benchmark.graphics import plot_random_outputs_multi_ts
 from src.benchmark.metrics import eval_loss, define_loss_fn, collect_outputs
+from deepspeed.ops import adam
 from typing import Any, Dict
 
 import json
-import numpy as np
-import torch
-from pytorch_lightning import LightningModule, Trainer
+from pytorch_lightning.strategies import DeepSpeedStrategy
+from pytorch_lightning import LightningModule, Trainer, loggers
 from arch import ClimaXRainBench
 from utils.lr_scheduler import LinearWarmupCosineAnnealingLR
 from utils.metrics import (
@@ -85,6 +82,8 @@ class RainForecastModule(LightningModule):
         self.multi_gpu = hparams['multi_gpu']
         self.lat, self.lon = hparams['latlon']
         self.test_step_outputs = []
+        self.val_step_outputs = []
+        self.version = hparams["version"]
         
         if lat2d is None:
             lat2d = get_lat2d(hparams['grid'], self.validset.dataset)
@@ -137,7 +136,6 @@ class RainForecastModule(LightningModule):
         return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
 
     def test_dataloader(self):
-        print('test set length', len(self.testset))
         return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
     
     def set_test_clim(self):
@@ -173,41 +171,80 @@ class RainForecastModule(LightningModule):
 
     def validation_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
-
-
-        # inputs, output, lts = batch
-        # pred = self(inputs.contiguous())
-        # results = eval_loss(pred, output, lts, self.loss, self.lead_times, phase='train', target_v=self.target_v, normalizer=self.normalizer)
-        # return {'loss': results['train_loss'], 'log': results, 'progress_bar': results}
-    
-        all_loss_dicts = self.net.evaluate(
+        _, pred = self.net.forward(
             x,
             y,
             lead_times,
             self.categories['input'],
             self.categories['output'],
-            transform=self.denormalizer,
-            metrics=[lat_weighted_mse_val, lat_weighted_rmse],
+            metric=None,
             lat=self.lat,
-            clim=self.val_clim,
-            log_postfix=None
         )
 
-        loss_dict = {}
-        for d in all_loss_dicts:
-            for k in d.keys():
-                loss_dict[k] = d[k]
-
-        for var in loss_dict.keys():
+        results = eval_loss(pred, y, lead_times, self.loss, self.lead_times, phase='val', target_v=self.categories['output'][0], normalizer=self.normalizer)
+        
+        for var in "val_loss", "val_loss_" + self.categories['output'][0]:
             self.log(
-                "val/" + var,
-                loss_dict[var],
+                "test/" + var,
+                results[var],
                 on_step=False,
                 on_epoch=True,
                 prog_bar=False,
                 sync_dist=True,
             )
-        return loss_dict
+
+        self.val_step_outputs.append(results)
+        return results
+
+    
+        # all_loss_dicts = self.net.evaluate(
+        #     x,
+        #     y,
+        #     lead_times,
+        #     self.categories['input'],
+        #     self.categories['output'],
+        #     transform=self.denormalizer,
+        #     metrics=[lat_weighted_mse_val, lat_weighted_rmse],
+        #     lat=self.lat,
+        #     clim=self.val_clim,
+        #     log_postfix=None
+        # )
+
+        # loss_dict = {}
+        # for d in all_loss_dicts:
+        #     for k in d.keys():
+        #         loss_dict[k] = d[k]
+
+        # for var in loss_dict.keys():
+        #     self.log(
+        #         "val/" + var,
+        #         loss_dict[var],
+        #         on_step=False,
+        #         on_epoch=True,
+        #         prog_bar=False,
+        #         sync_dist=True,
+        #     )
+        # return loss_dict
+    
+
+    def on_validation_epoch_end(self):
+        node_loss = collect_outputs(self.val_step_outputs, False)
+        self.val_step_outputs.clear()  # free memory
+
+        if isinstance(node_loss, list):
+            node_loss = node_loss[0]
+    
+        all_losses = self.all_gather(node_loss)
+        mean_losses = {k: float(torch.mean(x)) for k, x in all_losses.items()}
+
+        # log mean losses
+        for var in mean_losses.keys():
+            self.log(
+                "val/" + var,
+                mean_losses[var],
+                sync_dist=True
+            )
+
 
     def test_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
@@ -221,7 +258,8 @@ class RainForecastModule(LightningModule):
             lat=self.lat,
         )
         results = eval_loss(pred, y, lead_times, self.loss, self.lead_times, phase='test', target_v=self.categories['output'][0], normalizer=self.normalizer)
-        for var in results.keys():
+        # only log test_loss and test_loss_var where var is the first variable in the output list
+        for var in "test_loss", "test_loss_" + self.categories['output'][0]:
             self.log(
                 "test/" + var,
                 results[var],
@@ -253,6 +291,37 @@ class RainForecastModule(LightningModule):
         #         loss_dict[k] = d[k]
 
         # return loss_dict
+
+    def on_test_epoch_end(self) -> None:
+        node_loss = collect_outputs(self.test_step_outputs, False)
+        self.test_step_outputs.clear()  # free memory
+
+        if isinstance(node_loss, list):
+            node_loss = node_loss[0]
+    
+        all_losses = self.all_gather(node_loss)
+        mean_losses = {k: float(torch.mean(x)) for k, x in all_losses.items()}
+
+        # log mean losses
+        for var in mean_losses.keys():
+            self.log(
+                "test/" + var,
+                mean_losses[var],
+                sync_dist=True
+            )
+        
+        # Save evaluation results
+        results_path = Path(f'./results/{self.version}_results.json')
+        
+        with open(results_path, 'w') as fp:
+            json.dump(mean_losses, fp, indent=4)
+
+        fp.close()
+        
+
+
+
+
     
     def configure_optimizers(self):
         decay = []
@@ -280,7 +349,7 @@ class RainForecastModule(LightningModule):
         #     ]
         # )
 
-        optimizer = ops.adam.FusedAdam(
+        optimizer = adam.FusedAdam(
             [
                 {
                     "params": decay,
@@ -297,7 +366,7 @@ class RainForecastModule(LightningModule):
             ]
         )
 
-        # optimizer = ops.adam.DeepSpeedCPUAdam(
+        # optimizer = adam.DeepSpeedCPUAdam(
         #     [
         #         {
         #             "params": decay,
@@ -465,11 +534,12 @@ def main(hparams):
     # use rainforecast module
     model = RainForecastModule(hparams, loaderDict['train'], loaderDict['valid'], loaderDict['test'], normalizer, collate, pretrained_path=hparams['load'])
 
+
     trainer = Trainer(
         accelerator='gpu',
         devices=hparams['gpus'],
         logger=logger,
-        max_epochs=hparams['epochs'],
+        max_epochs=hparams['max_epochs'],
         precision=16 if hparams['use_amp'] else 32,
         default_root_dir=hparams['log_path'],
         deterministic=True,
@@ -481,22 +551,20 @@ def main(hparams):
     # Evaluate the model
     trainer.test(model.cuda())
 
-    # wait for all processes to complete (? idk if this works)
-    torch.distributed.barrier()
-    res = collect_outputs(model.test_step_outputs, False)
-    model.test_step_outputs.clear()  # free memory
-    print(res, type(res))
+    # res = collect_outputs(model.test_step_outputs, False)
+    # model.test_step_outputs.clear()  # free memory
+    # print(res, type(res))
 
-    if isinstance(res, list):
-        res = res[0]
+    # if isinstance(res, list):
+    #     res = res[0]
 
     # Save evaluation results
-    results_path = Path(f'./results/{hparams["version"]}_results.json')
+    # results_path = Path(f'./results/{hparams["version"]}_results.json')
     
-    with open(results_path, 'w') as fp:
-        json.dump(res, fp, indent=4)
+    # with open(results_path, 'w') as fp:
+    #     json.dump(res, fp, indent=4)
 
-    fp.close()
+    # fp.close()
     
 
 
@@ -534,9 +602,6 @@ def main_baselines(hparams):
     
     # collect results
     log_dict = collect_outputs(outputs, False)
-    # if target_v is 'tp' multiply by 1000 to get mm/day
-    if target_v == 'tp':
-        log_dict = {k: v * 1000 for k, v in log_dict.items()}
         
     log_dict = {v: float(log_dict[v].detach().cpu()) for v in log_dict}
     print(log_dict)

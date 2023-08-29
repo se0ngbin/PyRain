@@ -25,6 +25,7 @@ def get_data(hparams: dict, tvt: str = 'train_valid_test'):
                     sample_conf=sample_conf) for p in tvt.split('_')}
 
     # Define collate function
+    time_shift = None
     normalizer = read_normalization_stats(hparams['norm_path'])
     if hparams['inc_time']:
         time_shift = get_local_shift(hparams['grid'], loaderDict['train'].dataset)
@@ -67,7 +68,9 @@ def write_partition_conf(sources: str, imerg: bool):
 
     val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 12,31,23).timestamp())
     test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 12, 31, 17).timestamp())
-    # test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 1, 31, 23).timestamp())
+    # train_timerange = (datetime(2016,4,1,0).timestamp(), datetime(2016, 4, 15,23).timestamp())
+    # val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 1,15,23).timestamp())
+    # test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 1, 15, 23).timestamp())
 
     increments = int(sample_stride * 60 * 60)
 

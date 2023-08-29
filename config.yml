@@ -1,10 +1,10 @@
 data_paths: [
-  "/data0/datasets/rainbench/era5625_aaai/era5625_aaai-era5625_aaai.dill", 
-  "/data0/datasets/rainbench/imerg5625/imerg5625-imerg5625.dill",
-  "/data0/datasets/rainbench/simsat5625/simsat5625-simsat5625.dill"
+  "/home/data/datasets/rainbench/era5625_aaai/era5625_aaai-era5625_aaai.dill", 
+  "/home/data/datasets/rainbench/imerg5625/imerg5625-imerg5625.dill",
+  "/home/data/datasets/rainbench/simsat5625/simsat5625-simsat5625.dill"
 ]
 norm_path: "/home/seongbin/PyRain/analysis/precip_estimation/normalise/5625__16-04-01_12:00to17-12-31_11:00.json"
-log_path: "/data0/ckpts/seongbin/rainbench/"
+log_path: "/home/data/ckpts/seongbin/rainbench/"
 lr: 0.0005
 beta_1: 0.9
 beta_2: 0.999

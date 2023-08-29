@@ -18,9 +18,9 @@ n_procs = 4 # Set to number of available CPUs
 expname = "sample_datasets"
 
 datapath = [
-    "/data0/datasets/rainbench/samples/era5625_sample/era5625_sample.dill", 
-    "/data0/datasets/rainbench/samples/imerg5625_sample/imerg5625_sample.dill",
-    "/data0/datasets/rainbench/samples/simsat5625_sample/simsat5625_sample.dill"
+    "/home/data/datasets/rainbench/samples/era5625_sample/era5625_sample.dill", 
+    "/home/data/datasets/rainbench/samples/imerg5625_sample/imerg5625_sample.dill",
+    "/home/data/datasets/rainbench/samples/simsat5625_sample/simsat5625_sample.dill"
 ]
 
 # partition_conf = {"train":

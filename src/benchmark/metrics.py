@@ -66,10 +66,15 @@ def eval_loss(pred, output, lts, loss_function, possible_lead_times, phase='val'
         scaled_pred_v = (torch.exp(pred[:, 0, :, :]) - 1 ) * normalizer[target_v]['std']
         scaled_output_v = (torch.exp(output[:, 0, :, :]) - 1) * normalizer[target_v]['std']
         results[f'{phase}_loss_' + target_v] = loss_function(scaled_pred_v, scaled_output_v)
+        if target_v == 'tp':
+            results[f'{phase}_loss_' + target_v] *= 1e3
         # Caclulate loss per lead_time
         for t, cond in lead_time_dist.items(): 
             if any(cond):
                 results[f'{phase}_loss_{target_v}_{t}hrs'] = loss_function(scaled_pred_v[cond], scaled_output_v[cond])
+                # if target_v is 'tp' multiply by 1000 to get mm/day
+                if target_v == 'tp':
+                    results[f'{phase}_loss_{target_v}_{t}hrs'] *= 1e3
             else:
                 results[f'{phase}_loss_{target_v}_{t}hrs'] = scaled_pred_v.new([float('nan')])[0]
     return results
