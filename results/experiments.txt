@@ -1,0 +1,13 @@
+Test 3: lr = 5e-5, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3
+Test 4: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3
+Test 5: lr = 5e-4, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 5
+Test 7: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 5
+
+Test 8: lr = 5e-4, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 4
+Test 6: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 4
+
+est 9: lr = 5e-4, batch_size = 2 on each GPU, 6 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
+Test 10: lr = 5e-5, batch_size = 2 on each GPU, 6 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
+Test 11: lr = 5e-7, batch_size = 2 on each GPU, 6 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
+
+
