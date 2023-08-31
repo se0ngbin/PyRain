@@ -68,7 +68,7 @@ def write_partition_conf(sources: str, imerg: bool):
 
     val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 12,31,23).timestamp())
     test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 12, 31, 17).timestamp())
-    # train_timerange = (datetime(2016,4,1,0).timestamp(), datetime(2016, 4, 15,23).timestamp())
+    # train_timerange = (datetime(2016,4,1,0).timestamp(), datetime(2016, 5, 15,23).timestamp())
     # val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 1,15,23).timestamp())
     # test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 1, 15, 23).timestamp())
 

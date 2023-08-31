@@ -18,7 +18,7 @@ from deepspeed.ops import adam
 from typing import Any, Dict
 
 import json
-from pytorch_lightning.strategies import DeepSpeedStrategy
+from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning import LightningModule, Trainer, loggers
 from arch import ClimaXRainBench
 from utils.lr_scheduler import LinearWarmupCosineAnnealingLR
@@ -182,16 +182,6 @@ class RainForecastModule(LightningModule):
         )
 
         results = eval_loss(pred, y, lead_times, self.loss, self.lead_times, phase='val', target_v=self.categories['output'][0], normalizer=self.normalizer)
-        
-        for var in "val_loss", "val_loss_" + self.categories['output'][0]:
-            self.log(
-                "test/" + var,
-                results[var],
-                on_step=False,
-                on_epoch=True,
-                prog_bar=False,
-                sync_dist=True,
-            )
 
         self.val_step_outputs.append(results)
         return results
@@ -258,16 +248,6 @@ class RainForecastModule(LightningModule):
             lat=self.lat,
         )
         results = eval_loss(pred, y, lead_times, self.loss, self.lead_times, phase='test', target_v=self.categories['output'][0], normalizer=self.normalizer)
-        # only log test_loss and test_loss_var where var is the first variable in the output list
-        for var in "test_loss", "test_loss_" + self.categories['output'][0]:
-            self.log(
-                "test/" + var,
-                results[var],
-                on_step=False,
-                on_epoch=True,
-                prog_bar=False,
-                sync_dist=True,
-            )
 
         self.test_step_outputs.append(results)
         return results
@@ -538,12 +518,15 @@ def main(hparams):
     trainer = Trainer(
         accelerator='gpu',
         devices=hparams['gpus'],
+        # devices=[0,2],
         logger=logger,
         max_epochs=hparams['max_epochs'],
         precision=16 if hparams['use_amp'] else 32,
         default_root_dir=hparams['log_path'],
         deterministic=True,
         strategy=hparams['strategy'],
+        callbacks=[EarlyStopping('val/val_loss', patience=3)],
+        accumulate_grad_batches=2,
     )
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model)
@@ -591,7 +574,7 @@ def main_baselines(hparams):
     outputs = []
     if hparams['persistence']:
         for inputs, output, lts in tqdm(dataloader):
-            results = eval_loss(inputs, output, lts, loss, lead_times)
+            results = eval_loss(inputs, output, lts, loss, lead_times, phase="test", target_v=target_v)
             outputs.append(results)
     else:
         for inputs, output, lts in tqdm(dataloader):
@@ -603,7 +586,7 @@ def main_baselines(hparams):
     # collect results
     log_dict = collect_outputs(outputs, False)
         
-    log_dict = {v: float(log_dict[v].detach().cpu()) for v in log_dict}
+    # log_dict = {v: float(log_dict[v].detach().cpu()) for v in log_dict}
     print(log_dict)
 
     # Save evaluation results
@@ -650,7 +633,7 @@ if __name__ == '__main__':
     parser.add_argument("--phase", type=str, default='test', choices=['test', 'valid'], help='Which dataset to test on.')
     parser.add_argument("--auto_lr", action='store_true', help='Auto select learning rate.')
     parser.add_argument("--auto_bsz", action='store_true', help='Auto select batch size.')
-    parser.add_argument("--strategy", type=str, default='deepspeed_stage_3', help='Memory saving strategy.')
+    parser.add_argument("--strategy", type=str, default='deepspeed_stage_2', help='Memory saving strategy.')
     # Monitoring
     parser.add_argument("--version", type=str, help='Version tag for tensorboard')
     parser.add_argument("--plot", action='store_true', help='Plot outputs on tensorboard')
