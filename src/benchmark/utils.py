@@ -132,10 +132,14 @@ def collate_fn(x_list, hparams, normalizer, time_shift):
     for sample in x_list:
         output.append(np.concatenate([sample[0]['target'][v] for v in categories['output']], 1))
         lead_times.append(int(sample[0]['__sample_modes__'].split('_')[-1]))
+        inputs.append([])
 
-        # temporal
-        inputs.append([sample[0]['label'][v] for v in categories[tmp]])
+        if categories['input_static']:
+            inputs[-1] += [np.repeat(sample[0]['label'][v][None, :, :], hparams['seq_len'], 0) for v in categories['input_static']]
 
+        # input_temporal
+        inputs[-1] += [sample[0]['label'][v] for v in categories[tmp]]
+        
         # hour, day, month
         if compute_time:
             time_scaling = {'hour': 24, 'day': 31, 'month': 12}
@@ -146,10 +150,10 @@ def collate_fn(x_list, hparams, normalizer, time_shift):
             for m in ['hour', 'day', 'month']:
                 tfunc = np.vectorize(lambda t: getattr(t, m))
                 inputs[-1] += [tfunc(timestamps)/ time_scaling[m]]
-
-        if categories['input_static']:
-            inputs[-1] += [np.repeat(sample[0]['label'][v][None, :, :], hparams['seq_len'], 0) for v in categories['input_static']]
+        
         inputs[-1] = np.concatenate(inputs[-1], 1)
+
+
     
     inputs = torch.Tensor(np.stack(inputs))
     output = torch.Tensor(np.concatenate(output))

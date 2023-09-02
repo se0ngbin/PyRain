@@ -13,7 +13,7 @@ warmup_epochs: 60
 max_epochs: 600
 warmup_start_lr: 0.00000001
 eta_min: 0.00000001
-acc_grad: 1
+acc_grad: 2
 batch_size: 2
 sample_freq: 6
 sources: "simsat_era"

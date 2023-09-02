@@ -1,0 +1,18 @@
+{'test_loss': tensor(0.4095, device='cuda:3'), 'test_loss_24hrs': tensor(nan, device='cuda:3', dtype=torch.float16), 'test_loss_48hrs': tensor(nan, device='cuda:3', dtype=torch.float16), 'test_loss_72hrs': tensor(nan, device='cuda:3', dtype=torch.float16), 'test_loss_96hrs': tensor(nan, device='cuda:3', dtype=torch.float16), 'test_loss_120hrs': tensor(0.4095, device='cuda:3'), 'test_loss_tp': tensor(0.0006, device='cuda:3'), 'test_loss_tp_24hrs': tensor(nan, device='cuda:3'), 'test_loss_tp_48hrs': tensor(nan, device='cuda:3'), 'test_loss_tp_72hrs': tensor(nan, device='cuda:3'), 'test_loss_tp_96hrs': tensor(nan, device='cuda:3'), 'test_loss_tp_120hrs': tensor(0.0006, device='cuda:3')}
+{'test_loss': tensor(0.4072, device='cuda:2'), 'test_loss_24hrs': tensor(nan, device='cuda:2', dtype=torch.float16), 'test_loss_48hrs': tensor(nan, device='cuda:2', dtype=torch.float16), 'test_loss_72hrs': tensor(nan, device='cuda:2', dtype=torch.float16), 'test_loss_96hrs': tensor(nan, device='cuda:2', dtype=torch.float16), 'test_loss_120hrs': tensor(0.4072, device='cuda:2'), 'test_loss_tp': tensor(0.0005, device='cuda:2'), 'test_loss_tp_24hrs': tensor(nan, device='cuda:2'), 'test_loss_tp_48hrs': tensor(nan, device='cuda:2'), 'test_loss_tp_72hrs': tensor(nan, device='cuda:2'), 'test_loss_tp_96hrs': tensor(nan, device='cuda:2'), 'test_loss_tp_120hrs': tensor(0.0005, device='cuda:2')}
+
+
+{'test_loss': tensor([0.3906, 0.3936, 0.3955, 0.3945], device='cuda:1'), 
+'test_loss_24hrs': tensor([0.3909, 0.3943, 0.3960, 0.3945], device='cuda:1'), 
+'test_loss_48hrs': tensor([0.3906, 0.3936, 0.3958, 0.3945], device='cuda:1'), 
+'test_loss_72hrs': tensor([0.3906, 0.3936, 0.3960, 0.3950], device='cuda:1'), 
+'test_loss_96hrs': tensor([0.3906, 0.3938, 0.3958, 0.3948], device='cuda:1'), 
+'test_loss_120hrs': tensor([0.3911, 0.3940, 0.3960, 0.3950], device='cuda:1'), 
+'test_loss_tp': tensor([0.0005, 0.0005, 0.0005, 0.0005], device='cuda:1'), 
+'test_loss_tp_24hrs': tensor([0.4863, 0.4880, 0.4763, 0.4973], device='cuda:1'), 
+'test_loss_tp_48hrs': tensor([0.4839, 0.4863, 0.4731, 0.4949], device='cuda:1'), 
+'test_loss_tp_72hrs': tensor([0.4827, 0.4851, 0.4797, 0.5010], device='cuda:1'), 
+'test_loss_tp_96hrs': tensor([0.4839, 0.4863, 0.4717, 0.4949], device='cuda:1'), 
+'test_loss_tp_120hrs': tensor([0.4822, 0.4875, 0.4768, 0.4988], device='cuda:1')}
+
+export NCCL_P2P_DISABLE=1

@@ -18,7 +18,7 @@ from deepspeed.ops import adam
 from typing import Any, Dict
 
 import json
-from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning import LightningModule, Trainer, loggers
 from arch import ClimaXRainBench
 from utils.lr_scheduler import LinearWarmupCosineAnnealingLR
@@ -62,21 +62,23 @@ class RainForecastModule(LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
         self.categories = hparams['categories']
+        print("===========================================")
+        print("Categories: ", self.categories)
+        print("===========================================")
         self.net = ClimaXRainBench(
                         default_vars=self.categories['input'],
                         out_vars=self.categories['output'],
+                        time_history=3,
         )
         if len(pretrained_path) > 0:
-            self.load_mae_weights(pretrained_path)
+            # self.load_mae_weights(pretrained_path)
+            self.load_pretrained_weights(pretrained_path)
 
         self.trainset = train_set
         self.validset = valid_set
         self.testset = test_set
         self.collate = collate
         self.normalizer = normalizer
-        self.pred_range = 0
-        self.val_clim = None
-        self.set_test_clim()
         self.set_denormalizer()
         self.lead_times = hparams['lead_times']
         self.multi_gpu = hparams['multi_gpu']
@@ -89,6 +91,38 @@ class RainForecastModule(LightningModule):
             lat2d = get_lat2d(hparams['grid'], self.validset.dataset)
         self.weights_lat, self.loss = define_loss_fn(lat2d)
         self.lat = lat2d[0][:,0]
+
+    def load_pretrained_weights(self, pretrained_path):
+        if pretrained_path.startswith("http"):
+            checkpoint = torch.hub.load_state_dict_from_url(pretrained_path)
+        else:
+            checkpoint = torch.load(pretrained_path, map_location=torch.device("cpu"))
+
+        print("Loading pre-trained checkpoint from: %s" % pretrained_path)
+        checkpoint_model = checkpoint["state_dict"]
+        # interpolate positional embedding
+        interpolate_pos_embed(self.net, checkpoint_model, new_size=self.net.img_size)
+
+        state_dict = self.state_dict()
+        if self.net.parallel_patch_embed:
+            if "token_embeds.proj_weights" not in checkpoint_model.keys():
+                raise ValueError(
+                    "Pretrained checkpoint does not have token_embeds.proj_weights for parallel processing. Please convert the checkpoints first or disable parallel patch_embed tokenization."
+                )
+
+        # checkpoint_keys = list(checkpoint_model.keys())
+        for k in list(checkpoint_model.keys()):
+            if "channel" in k:
+                checkpoint_model[k.replace("channel", "var")] = checkpoint_model[k]
+                del checkpoint_model[k]
+        for k in list(checkpoint_model.keys()):
+            if k not in state_dict.keys() or checkpoint_model[k].shape != state_dict[k].shape:
+                print(f"Removing key {k} from pretrained checkpoint")
+                del checkpoint_model[k]
+
+        # load pre-trained model
+        msg = self.load_state_dict(checkpoint_model, strict=False)
+        print(msg)
 
 
     def load_mae_weights(self, pretrained_path):
@@ -115,7 +149,7 @@ class RainForecastModule(LightningModule):
                 del checkpoint_model[k]
             
             if 'token_embeds' in k or 'head' in k: # initialize embedding from scratch
-                print(f"Removing key {k} from pretrained checkpoint")
+                print(f"Removing key {k} from pretrained checkpoint.")
                 del checkpoint_model[k]
                 continue
                 
@@ -123,6 +157,16 @@ class RainForecastModule(LightningModule):
             if k not in state_dict.keys() or checkpoint_model[k].shape != state_dict[k].shape:
                 print(f"Removing key {k} from pretrained checkpoint")
                 del checkpoint_model[k]
+
+        # print all keys in checkpoint
+        print("Keys in checkpoint:")
+        for k in checkpoint_model.keys():
+            print(k)
+
+        # print all keys in model
+        print("Keys in model:")
+        for k in state_dict.keys():
+            print(k)
 
         # load pre-trained model
         msg = self.load_state_dict(checkpoint_model, strict=False)
@@ -137,14 +181,6 @@ class RainForecastModule(LightningModule):
 
     def test_dataloader(self):
         return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
-    
-    def set_test_clim(self):
-        # y_avg = torch.from_numpy(self.Y_train_all).squeeze(1).mean(0) # H, W
-        # w_lat = np.cos(np.deg2rad(self.lat)) # (H,)
-        # w_lat = w_lat / w_lat.mean()
-        # w_lat = torch.from_numpy(w_lat).unsqueeze(-1).to(dtype=y_avg.dtype, device=y_avg.device) # (H, 1)
-        # self.test_clim = torch.abs(torch.mean(y_avg * w_lat))
-        self.test_clim = 0
 
     def set_denormalizer(self):
         target_v = self.categories['output'][0]
@@ -216,7 +252,6 @@ class RainForecastModule(LightningModule):
         #     )
         # return loss_dict
     
-
     def on_validation_epoch_end(self):
         node_loss = collect_outputs(self.val_step_outputs, False)
         self.val_step_outputs.clear()  # free memory
@@ -234,7 +269,6 @@ class RainForecastModule(LightningModule):
                 mean_losses[var],
                 sync_dist=True
             )
-
 
     def test_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
@@ -299,10 +333,6 @@ class RainForecastModule(LightningModule):
         fp.close()
         
 
-
-
-
-    
     def configure_optimizers(self):
         decay = []
         no_decay = []
@@ -525,8 +555,21 @@ def main(hparams):
         default_root_dir=hparams['log_path'],
         deterministic=True,
         strategy=hparams['strategy'],
-        callbacks=[EarlyStopping('val/val_loss', patience=3)],
-        accumulate_grad_batches=2,
+        callbacks=[
+            EarlyStopping('val/val_loss', patience=3), 
+            LearningRateMonitor(logging_interval='step'),
+            ModelCheckpoint(
+                dirpath=hparams['log_path'],
+                filename='epoch-{epoch:03d}',
+                monitor='val/val_loss',
+                save_top_k=1,
+                mode='min',
+                save_last=True,
+                verbose=False,
+                auto_insert_metric_name=False,
+            )
+        ],
+        accumulate_grad_batches=hparams['acc_grad'],
     )
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model)

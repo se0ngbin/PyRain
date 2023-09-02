@@ -1,0 +1,14 @@
+{
+    "test_loss": 0.279296875,
+    "test_loss_24hrs": 0.2798549234867096,
+    "test_loss_48hrs": 0.2794712781906128,
+    "test_loss_72hrs": 0.2794015109539032,
+    "test_loss_96hrs": 0.2793666422367096,
+    "test_loss_120hrs": 0.2794015109539032,
+    "test_loss_precipitationcal": 0.8067801594734192,
+    "test_loss_precipitationcal_24hrs": 0.8117327094078064,
+    "test_loss_precipitationcal_48hrs": 0.8074777126312256,
+    "test_loss_precipitationcal_72hrs": 0.8069196939468384,
+    "test_loss_precipitationcal_96hrs": 0.806222140789032,
+    "test_loss_precipitationcal_120hrs": 0.804757297039032
+}

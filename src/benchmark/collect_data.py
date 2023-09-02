@@ -68,9 +68,9 @@ def write_partition_conf(sources: str, imerg: bool):
 
     val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 12,31,23).timestamp())
     test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 12, 31, 17).timestamp())
-    # train_timerange = (datetime(2016,4,1,0).timestamp(), datetime(2016, 5, 15,23).timestamp())
-    # val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 1,15,23).timestamp())
-    # test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 1, 15, 23).timestamp())
+    train_timerange = (datetime(2016,4,1,0).timestamp(), datetime(2016, 5, 15,23).timestamp())
+    val_timerange =  (datetime(2018,1,6,0).timestamp(), datetime(2018, 1,15,23).timestamp())
+    test_timerange = (datetime(2019,1,6,0).timestamp(), datetime(2019, 1, 15, 23).timestamp())
 
     increments = int(sample_stride * 60 * 60)
 
@@ -127,6 +127,7 @@ def define_categories(sources: str, inc_time: bool, imerg: bool):
     """
     Write a dictionary which holds lists specifying the model input / output variables.
     """
+    climax_var_order = ["lsm", "orography", "lat2d", "t2m", "z-500", "z-850", "t-500", "t-850", "q-500", "q-850"]
     simsat_vars_list = ['clbt-0', 'clbt-1', 'clbt-2'] if 'simsat' in sources else []
     era_vars_list = ['sp', 't2m', 'z-300', 'z-500', 'z-850', 't-300', 't-500', 't-850', \
         'q-300', 'q-500', 'q-850', 'clwc-300', 'clwc-500', 'ciwc-500', 'clwc-850', 'ciwc-850'] if 'era' in sources else []
@@ -135,10 +136,16 @@ def define_categories(sources: str, inc_time: bool, imerg: bool):
     input_temporal = simsat_vars_list + era_vars_list
     input_temporal_clbt = simsat_vars_list_clbt + era_vars_list
     
-    constants = ['lsm','orography', 'lat2d', 'lon2d', 'slt']
-    inputs = input_temporal + (['hour', 'day', 'month'] if inc_time else []) + constants
+    # sort input variables - if var in climax_var_order, sort by that, else append to end
+    input_temporal = sorted(input_temporal, key=lambda x: climax_var_order.index(x) if x in climax_var_order else len(climax_var_order))
+    input_temporal_clbt = sorted(input_temporal_clbt, key=lambda x: climax_var_order.index(x) if x in climax_var_order else len(climax_var_order))
+    constants = sorted(['lsm','orography', 'lat2d', 'lon2d', 'slt'], key=lambda x: climax_var_order.index(x) if x in climax_var_order else len(climax_var_order))
+
+    inputs =  constants + input_temporal + (['hour', 'day', 'month'] if inc_time else [])
+    # inputs = input_temporal + (['hour', 'day', 'month'] if inc_time else []) + constants
     output = ['precipitationcal'] if imerg else ['tp']
 
+    
     categories = {
                 'input': inputs,
                 'input_temporal': input_temporal,
