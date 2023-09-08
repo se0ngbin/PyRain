@@ -568,7 +568,7 @@ def main(hparams):
             EarlyStopping('val/val_loss', patience=3), 
             LearningRateMonitor(logging_interval='step'),
             ModelCheckpoint(
-                dirpath=hparams['log_path'],
+                dirpath='{}/{}/'.format(hparams['log_path'], hparams['version']),
                 filename='epoch-{epoch:03d}',
                 monitor='val/val_loss',
                 save_top_k=1,
@@ -583,7 +583,7 @@ def main(hparams):
     torch.set_float32_matmul_precision('medium')
     trainer.fit(model)
 
-    # Evaluate the model
+    # Evaluate the model (best checkpoint)
     trainer.test(model.cuda())
 
     # res = collect_outputs(model.test_step_outputs, False)
@@ -600,6 +600,17 @@ def main(hparams):
     #     json.dump(res, fp, indent=4)
 
     # fp.close()
+    
+def main_test(hparams):
+    hparams = vars(hparams)
+    hparams, loaderDict, normalizer, collate = get_data(hparams)
+    add_device_hparams(hparams)
+
+    model = RainForecastModule.load_from_checkpoint(hparams['ckpt'])
+    trainer = Trainer()
+
+    trainer.test(model.cuda())
+
     
 
 
@@ -681,6 +692,7 @@ if __name__ == '__main__':
     parser.add_argument("--epochs", type=int, default=100, help="No. of epochs to train")
     parser.add_argument("--num_workers", type=int, default=8, help="No. of dataloader workers")
     parser.add_argument("--test", action='store_true', help='Evaluate trained model')
+    parser.add_argument("--ckpt", type=str, help='Path of checkpoint to load')
     parser.add_argument("--load", type=str, help='Path of checkpoint directory to load')
     parser.add_argument("--phase", type=str, default='test', choices=['test', 'valid'], help='Which dataset to test on.')
     parser.add_argument("--auto_lr", action='store_true', help='Auto select learning rate.')
@@ -700,6 +712,8 @@ if __name__ == '__main__':
     
     if hparams.persistence or hparams.climatology:
         main_baselines(hparams)
+    elif hparams.test:
+        main_test(hparams)
     else:
         main(hparams)
 
