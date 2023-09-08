@@ -1,11 +1,11 @@
 data_paths: [
-  "/home/data/datasets/rainbench/era5625_aaai/era5625_aaai-era5625_aaai.dill", 
-  "/home/data/datasets/rainbench/imerg5625/imerg5625-imerg5625.dill",
-  "/home/data/datasets/rainbench/simsat5625/simsat5625-simsat5625.dill"
+  "/localhome/data/datasets/rainbench/era5625_aaai/era5625_aaai-era5625_aaai.dill", 
+  "/localhome/data/datasets/rainbench/imerg5625/imerg5625-imerg5625.dill",
+  "/localhome/data/datasets/rainbench/simsat5625/simsat5625-simsat5625.dill"
 ]
 norm_path: "/home/seongbin/PyRain/analysis/precip_estimation/normalise/5625__16-04-01_12:00to17-12-31_11:00.json"
-log_path: "/home/data/ckpts/seongbin/rainbench/"
-lr: 0.00005
+log_path: "/localhome/data/ckpts/seongbin/rainbench/"
+lr: 0.000005
 beta_1: 0.9
 beta_2: 0.999
 weight_decay: 0.00001
@@ -13,7 +13,6 @@ warmup_epochs: 60
 max_epochs: 600
 warmup_start_lr: 0.00000001
 eta_min: 0.00000001
-acc_grad: 2
 batch_size: 2
 sample_freq: 6
 sources: "simsat_era"

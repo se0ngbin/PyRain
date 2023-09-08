@@ -175,7 +175,6 @@ class ClimaX(nn.Module):
         c = len(self.default_vars)
         h = self.img_size[0] // p if h is None else h // p
         w = self.img_size[1] // p if w is None else w // p
-        print(h, w, x.shape)
         assert h * w == x.shape[1]
 
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
@@ -309,7 +308,7 @@ class ClimaXRainBench(ClimaX):
         self.time_history = time_history
         self.freeze_encoder = freeze_encoder
 
-        # used to aggregate multiple timesteps in the input
+        # used to aggregate multiple timesteps in the output
         self.time_pos_embed = nn.Parameter(torch.zeros(1, time_history, embed_dim), requires_grad=True)
         self.time_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
         self.time_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
@@ -319,17 +318,14 @@ class ClimaXRainBench(ClimaX):
         self.time_pos_embed.data.copy_(torch.from_numpy(time_pos_embed).float().unsqueeze(0))
 
         # overwrite ClimaX
-        # use a linear prediction head for this task
-        # self.head = nn.Linear(embed_dim, img_size[0]*img_size[1])
+        # replace head for this task, since output is different
+        self.head = nn.ModuleList()
+        for _ in range(decoder_depth):
+            self.head.append(nn.Linear(embed_dim, embed_dim))
+            self.head.append(nn.GELU())
+        self.head.append(nn.Linear(embed_dim, patch_size**2))
+        self.head = nn.Sequential(*self.head)
 
-        # if freeze_encoder:
-        #     for name, p in self.blocks.named_parameters():
-        #         name = name.lower()
-        #         # we do not freeze the norm layers, as suggested by https://arxiv.org/abs/2103.05247
-        #         if 'norm' in name:
-        #             continue
-        #         else:
-        #             p.requires_grad_(False)
 
     def forward_encoder(self, x: torch.Tensor, lead_times: torch.Tensor, variables):
         # x: `[B, T, V, H, W]` shape.
@@ -340,8 +336,6 @@ class ClimaXRainBench(ClimaX):
         # W - width.
         # D - embedding dimension.
         # L - ?
-
-        # print("-----\n forward", x.shape, lead_times.shape, variables, "\n")
 
         if isinstance(variables, list):
             variables = tuple(variables)
@@ -374,7 +368,6 @@ class ClimaXRainBench(ClimaX):
         # add time embedding
         # time emb: 1, T, D
         x = x.unflatten(0, sizes=(b, t)) # B, T, L, D
-        # print(x.shape, self.time_pos_embed.unsqueeze(2).shape)
         x = x + self.time_pos_embed.unsqueeze(2)
 
         # add lead time embedding
@@ -392,42 +385,43 @@ class ClimaXRainBench(ClimaX):
         x = self.norm(x) # BxT, L, D  
         x = x.unflatten(0, sizes=(b, t)) # B, T, L, D
 
-        # # global average pooling, also used in CNN-LSTM baseline in ClimateBench
-        x = x.mean(-2) # B, T, D
         time_query = self.time_query.repeat_interleave(x.shape[0], dim=0)
-        x, _ = self.time_agg(self.time_query, x, x)  # B, 1, D
+        # run time_agg for each L, so that the final output is B, L, D; TODO: not sure if this is the best way to do this
+        agg_x = torch.empty(0, dtype=x.dtype).to(x.device)
+        for i in range(x.shape[2]):
+            agg_x_i, _ = self.time_agg(time_query, x[:, :, i, :], x[:, :, i, :])
+            agg_x = torch.cat((agg_x, agg_x_i), dim=1)
 
-        return x 
+        return agg_x    # B, L, D
 
 
+    def unpatchify(self, x: torch.Tensor, h=None, w=None):
+        """
+        x: (B, L, patch_size**2)
+        return imgs: (B, 1, H, W)
+        """
+        p = self.patch_size
+        c = 1
+        h = self.img_size[0] // p if h is None else h // p
+        w = self.img_size[1] // p if w is None else w // p
+        assert h * w == x.shape[1]
+
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
+        x = torch.einsum("nhwpqc->nchpwq", x)
+        imgs = x.reshape(shape=(x.shape[0], c, h * p, w * p))
+        return imgs
+    
 
     def forward(self, x, y, lead_times, variables, out_variables, metric, lat):
-        x = self.forward_encoder(x, lead_times, variables)  # B, 1, D
-        print("x", x.shape)
-        preds = self.head(x)  # B, 1, V*p*p
-        print("preds", preds.shape)
+        out_transformers = self.forward_encoder(x, lead_times, variables)  # B, L, D
+        
+        preds = self.head(out_transformers)  # B, L, p*p
+
         preds = self.unpatchify(preds) # B, 1, H, W
-        print("new preds", preds.shape)
+
         if metric is None:
             loss = None
         else:
             loss = [m(preds, y, out_variables, lat) for m in metric]
+
         return loss, preds
-
-        # out_transformers = self.forward_encoder(x, lead_times, variables)  # BxT, L, D
-        # print("====================")
-        # print("out_transformers", out_transformers.shape)
-        # preds = self.head(out_transformers)  # B, L, V*p*p
-        # print("preds", preds.shape)
-        # print("====================")
-
-        # preds = self.unpatchify(preds)
-        # out_var_ids = self.get_var_ids(tuple(out_variables), preds.device)
-        # preds = preds[:, out_var_ids]
-
-        # if metric is None:
-        #     loss = None
-        # else:
-        #     loss = [m(preds, y, out_variables, lat) for m in metric]
-
-        # return loss, preds

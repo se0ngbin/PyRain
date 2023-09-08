@@ -24,8 +24,8 @@ from arch import ClimaXRainBench
 from utils.lr_scheduler import LinearWarmupCosineAnnealingLR
 from utils.metrics import (
     mse,
-    lat_weighted_mse_val,
-    lat_weighted_nrmse,
+    lat_weighted_mse,
+    lat_weighted_nrmse, 
     lat_weighted_rmse,
 )
 from utils.pos_embed import interpolate_pos_embed
@@ -62,11 +62,13 @@ class RainForecastModule(LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
         self.categories = hparams['categories']
+        climax_var_order = ["lsm", "orography", "lat2d", "t2m", "z-500", "z-850", "t-500", "t-850", "q-500", "q-850"]
+        sorted_vars = sorted(self.categories['input'], key=lambda x: climax_var_order.index(x) if x in climax_var_order else len(climax_var_order))
         print("===========================================")
         print("Categories: ", self.categories)
         print("===========================================")
         self.net = ClimaXRainBench(
-                        default_vars=self.categories['input'],
+                        default_vars=sorted_vars,
                         out_vars=self.categories['output'],
                         time_history=3,
         )
@@ -94,7 +96,7 @@ class RainForecastModule(LightningModule):
 
     def load_pretrained_weights(self, pretrained_path):
         if pretrained_path.startswith("http"):
-            checkpoint = torch.hub.load_state_dict_from_url(pretrained_path)
+            checkpoint = torch.hub.load_state_dict_from_url(pretrained_path, map_location=torch.device("cpu"))
         else:
             checkpoint = torch.load(pretrained_path, map_location=torch.device("cpu"))
 
@@ -115,6 +117,11 @@ class RainForecastModule(LightningModule):
             if "channel" in k:
                 checkpoint_model[k.replace("channel", "var")] = checkpoint_model[k]
                 del checkpoint_model[k]
+
+            if "head" in k:
+                print(f"Removing key {k} from pretrained checkpoint.")
+                del checkpoint_model[k]
+
         for k in list(checkpoint_model.keys()):
             if k not in state_dict.keys() or checkpoint_model[k].shape != state_dict[k].shape:
                 print(f"Removing key {k} from pretrained checkpoint")
@@ -191,7 +198,8 @@ class RainForecastModule(LightningModule):
     def training_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
 
-        loss_dict, _ = self.net.forward(x, y, lead_times, self.categories['input'], self.categories['output'], [mse], lat=self.lat)
+        loss_dict, p = self.net.forward(x, y, lead_times, self.categories['input'], self.categories['output'], [lat_weighted_mse], lat=self.lat)
+
         loss_dict = loss_dict[0]
         for var in loss_dict.keys():
             self.log(
@@ -207,6 +215,7 @@ class RainForecastModule(LightningModule):
 
     def validation_step(self, batch: Any, batch_idx: int):
         x, y, lead_times = batch
+
         _, pred = self.net.forward(
             x,
             y,
@@ -677,6 +686,7 @@ if __name__ == '__main__':
     parser.add_argument("--auto_lr", action='store_true', help='Auto select learning rate.')
     parser.add_argument("--auto_bsz", action='store_true', help='Auto select batch size.')
     parser.add_argument("--strategy", type=str, default='deepspeed_stage_2', help='Memory saving strategy.')
+    parser.add_argument("--acc_grad", type=int, default=1, help='Accumulate gradient.')
     # Monitoring
     parser.add_argument("--version", type=str, help='Version tag for tensorboard')
     parser.add_argument("--plot", action='store_true', help='Plot outputs on tensorboard')
