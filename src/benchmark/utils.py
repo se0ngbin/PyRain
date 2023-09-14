@@ -93,7 +93,8 @@ def apply_normalization(inputs, output, categories, normalizer):
             inputs[:, :, i, :, :] = (inputs[:, :, i, :, :] - normalizer[v]['mean']) / normalizer[v]['std']
     
     target_v = categories['output'][0]
-    output[:, 0, :, :] = np.log(output[:, 0, :, :] / normalizer[target_v]['std'] + 1)
+    # output[:, 0, :, :] = np.log(output[:, 0, :, :] / normalizer[target_v]['std'] + 1)
+    output[:, 0, :, :] = (output[:, 0, :, :] - normalizer[target_v]['mean']) / normalizer[target_v]['std']
     return inputs, output
 
 

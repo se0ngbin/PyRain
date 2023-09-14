@@ -1,43 +1,17 @@
-Test 3: lr = 5e-5, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3
-Test 4: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3
-Test 5: lr = 5e-4, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 5
-Test 7: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 5
-
-Test 8: lr = 5e-4, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 4
-
-Test 9: lr = 5e-4, batch_size = 2 on each GPU, 6 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
-Test 10: lr = 5e-5, batch_size = 2 on each GPU, 6 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
-Test 11: lr = 5e-7, batch_size = 2 on each GPU, 6 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
-
-
-Imerg
-Test 1: lr = 5e-4, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 1
-Test 2: lr = 5e-4, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
-Test 3: lr = 5e-5, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 1
-Test 4: lr = 5e-5, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
-Test 5: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 1
-Test 6: lr = 5e-7, batch_size = 2 on each GPU, 7 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
-
-
 New Experiments
-nTest 1: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 1
-nTest 2: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 2
-nTest 3: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 4
-nTest 4: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 1
-nTest 5: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 2
-nTest 6: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 4
 nTest 7: lr = 5e-6, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 1
 nTest 8: lr = 5e-6, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 2
 nTest 9: lr = 5e-6, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 3, accumulate_grad_batches = 4
-nTest 10: lr = 1e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 1
-nTest 11: lr = 1e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 2
-
-screen -dmSL scr bash -c "python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config.yml --use_amp --gpus 8 --acc_grad 1 --version ntest4; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config.yml --use_amp --gpus 8 --acc_grad 2 --version ntest5; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config.yml --use_amp --gpus 8 --acc_grad 4 --version ntest6; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config2.yml --use_amp --gpus 8 --acc_grad 1 --version ntest7; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config2.yml --use_amp --gpus 8 --acc_grad 2 --version ntest8; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config2.yml --use_amp --gpus 8 --acc_grad 4 --version ntest9;"
-
-
-screen -dmSL scr bash -c "python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config.yml --use_amp --gpus 8 --sources era16_3 --version temp1; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config.yml --use_amp --gpus 8 --sources simsat --version temp2; python3 src/rain_forecast/run_benchmark.py --inc_time --config_file config.yml --use_amp --gpus 8 --sources simsat_era --version temp3;"
 
 temp1: trained on era16_3
 temp2: trained on simsat
 temp3: trained on simsat_era
 temp4: trained on era
+
+Final:
+test 1: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 2
+test 2: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 2
+test 3: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 1
+test 4: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 4
+test 5: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 1
+test 6: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 4

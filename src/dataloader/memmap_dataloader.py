@@ -269,7 +269,7 @@ class Dataset(torch.utils.data.Dataset):
         self.debug_mode = False  # return sample stride indices instead of sample
         self.get_ts_only_mode = False  # in ts_only_mode, __getitem__ only returns sample timestamps instead of values
 
-        self.sample_mode_order = sorted(self.sample_conf.keys())
+        self.sample_mode_order = sorted(self.sample_conf.keys(), key=lambda x: int(x.split("_")[-1]))
         print("Sample mode order: ", self.sample_mode_order)
         # NOTE: may have to adjust
 

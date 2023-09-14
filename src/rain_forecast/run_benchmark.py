@@ -565,7 +565,7 @@ def main(hparams):
         deterministic=True,
         strategy=hparams['strategy'],
         callbacks=[
-            EarlyStopping('val/val_loss', patience=3), 
+            EarlyStopping('val/val_loss', patience=5), 
             LearningRateMonitor(logging_interval='step'),
             ModelCheckpoint(
                 dirpath='{}/{}/'.format(hparams['log_path'], hparams['version']),
@@ -584,7 +584,7 @@ def main(hparams):
     trainer.fit(model)
 
     # Evaluate the model (best checkpoint)
-    trainer.test(model.cuda())
+    trainer.test(model.cuda(), ckpt_path='best')
 
     # res = collect_outputs(model.test_step_outputs, False)
     # model.test_step_outputs.clear()  # free memory
