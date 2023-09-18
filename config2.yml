@@ -5,7 +5,7 @@ data_paths: [
 ]
 norm_path: "/home/seongbin/PyRain/analysis/precip_estimation/normalise/5625__16-04-01_12:00to17-12-31_11:00.json"
 log_path: "/localhome/data/ckpts/seongbin/rainbench/"
-lr: 0.000005
+lr: 0.00005
 beta_1: 0.9
 beta_2: 0.999
 weight_decay: 0.00001

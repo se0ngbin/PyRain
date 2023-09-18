@@ -1,0 +1,14 @@
+{
+    "test_loss": 1.1181640625,
+    "test_loss_24hrs": 1.1029052734375,
+    "test_loss_48hrs": 1.1181640625,
+    "test_loss_72hrs": 1.1197509765625,
+    "test_loss_96hrs": 1.1258544921875,
+    "test_loss_120hrs": 1.124267578125,
+    "test_loss_tp": 0.454864501953125,
+    "test_loss_tp_24hrs": 0.448577880859375,
+    "test_loss_tp_48hrs": 0.454833984375,
+    "test_loss_tp_72hrs": 0.45538330078125,
+    "test_loss_tp_96hrs": 0.45794677734375,
+    "test_loss_tp_120hrs": 0.45733642578125
+}
