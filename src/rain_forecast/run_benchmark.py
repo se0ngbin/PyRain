@@ -562,7 +562,6 @@ def main(hparams):
         max_epochs=hparams['max_epochs'],
         precision=16 if hparams['use_amp'] else 32,
         default_root_dir=hparams['log_path'],
-        deterministic=True,
         strategy=hparams['strategy'],
         callbacks=[
             EarlyStopping('val/val_loss', patience=5), 
