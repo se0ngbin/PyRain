@@ -326,6 +326,15 @@ class ClimaXRainBench(ClimaX):
         self.head.append(nn.Linear(embed_dim, patch_size**2))
         self.head = nn.Sequential(*self.head)
 
+        if freeze_encoder:
+            for name, p in self.blocks.named_parameters():
+                name = name.lower()
+                # we do not freeze the norm layers, as suggested by https://arxiv.org/abs/2103.05247
+                if 'norm' in name:
+                    continue
+                else:
+                    p.requires_grad_(False)
+
 
     def forward_encoder(self, x: torch.Tensor, lead_times: torch.Tensor, variables):
         # x: `[B, T, V, H, W]` shape.

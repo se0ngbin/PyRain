@@ -187,7 +187,7 @@ class RainForecastModule(LightningModule):
         return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
 
     def test_dataloader(self):
-        return DataLoader(self.validset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
+        return DataLoader(self.testset, batch_size=self.hparams['batch_size'], num_workers=self.hparams['num_workers'], collate_fn=self.collate, shuffle=False)
 
     def set_denormalizer(self):
         target_v = self.categories['output'][0]
