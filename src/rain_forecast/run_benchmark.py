@@ -71,6 +71,7 @@ class RainForecastModule(LightningModule):
                         default_vars=sorted_vars,
                         out_vars=self.categories['output'],
                         time_history=3,
+                        freeze_encoder=hparams['freeze_encoder'],
         )
         if len(pretrained_path) > 0:
             # self.load_mae_weights(pretrained_path)
@@ -584,6 +585,7 @@ def main(hparams):
 
     # Evaluate the model (best checkpoint)
     trainer.test(model.cuda(), ckpt_path='best')
+    # trainer.test(model.cuda(), ckpt_path='/localhome/data/ckpts/seongbin/rainbench/24hr-era79/epoch-001.ckpt/')
 
     # res = collect_outputs(model.test_step_outputs, False)
     # model.test_step_outputs.clear()  # free memory
@@ -670,7 +672,7 @@ if __name__ == '__main__':
     parser.add_argument("--grid", type=float, default=5.625, choices=[5.625, 1.4], help='Data resolution')
     parser.add_argument("--sample_time_window", type=int, default=12, help="Duration of sample time window, in hours")
     parser.add_argument("--sample_freq", type=int, default=3, help="Data frequency within the sample time window, in hours")
-    parser.add_argument("--forecast_time_window", type=int, default=120, help="Maximum lead time, in hours")
+    parser.add_argument("--forecast_time_window", type=int, default=24, help="Maximum lead time, in hours")
     parser.add_argument("--forecast_freq", type=int, default=24, help="Forecast frequency")
     parser.add_argument("--inc_time", action='store_true', help='Including hour/day/month in input')
     # 
@@ -698,6 +700,7 @@ if __name__ == '__main__':
     parser.add_argument("--auto_bsz", action='store_true', help='Auto select batch size.')
     parser.add_argument("--strategy", type=str, default='deepspeed_stage_2', help='Memory saving strategy.')
     parser.add_argument("--acc_grad", type=int, default=1, help='Accumulate gradient.')
+    parser.add_argument("--freeze_encoder", action='store_true', help='Freeze encoder weights.')
     # Monitoring
     parser.add_argument("--version", type=str, help='Version tag for tensorboard')
     parser.add_argument("--plot", action='store_true', help='Plot outputs on tensorboard')
