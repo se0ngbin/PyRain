@@ -15,3 +15,13 @@ test 3: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, earl
 test 4: lr = 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 4
 test 5: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 1
 test 6: lr = 5e-5, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 4
+
+
+NEW 24 hr:
+24hr-simsat_era, 24hr-era79, ime-24hr-simsat_era, ime-24hr-era00 - all with following configs:
+lr: 5e-4, batch_size = 2 on each GPU, 8 GPUS, deepspeed_level = 2, early_stopping patience = 5, accumulate_grad_batches = 2
+for era79: sample stride is 1, era79-3: sample stride is 3
+
+--> TODO
+try era16_3 (config3) to see if better performance on era79 is due to more data or familiarity of era
+try varying lr and batch size on era16_3
